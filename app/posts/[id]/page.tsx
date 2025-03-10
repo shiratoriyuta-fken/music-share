@@ -1,52 +1,150 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Textarea } from "@/components/ui/textarea"
-import { Heart, MessageSquare, Share2, Bookmark } from "lucide-react"
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Heart, MessageSquare, Share2, Bookmark } from 'lucide-react';
+import { supabase } from "@/lib/supabase";
+import { getPostById } from "@/lib/posts";
+import { useRouter } from "next/navigation";
 
 export default function PostPage({ params }: { params: { id: string } }) {
-  // 実際の実装では、ここでデータをフェッチします
-  const post = {
-    id: params.id,
-    title: "King Gnuの新アルバム「CEREMONY」レビュー",
-    author: "音楽マニア",
-    authorId: "101",
-    authorAvatar: "/placeholder.svg?height=40&width=40",
-    date: "2023年12月10日",
-    content: `
-      <p>King Gnuの最新アルバム「CEREMONY」は、バンドの音楽的成長を感じさせる作品です。</p>
-      <p>特に「白日」は、メロディアスなピアノの導入から始まり、常田大希の特徴的なボーカルが楽曲全体を引き立てています。歌詞の深さと音楽的な複雑さが見事に調和しており、聴くたびに新しい発見があります。</p>
-      <p>また、「三文小説」のような実験的な楽曲も収録されており、バンドの多様性を示しています。ロックの要素とポップなメロディの融合は、King Gnuの真骨頂と言えるでしょう。</p>
-      <p>全体として、このアルバムは日本の音楽シーンに新しい風を吹き込む素晴らしい作品です。</p>
-    `,
-    embedUrl: "https://www.youtube.com/embed/ony539T074w",
-    tags: ["J-Pop", "ロック", "King Gnu", "アルバムレビュー"],
-    likes: 124,
-    comments: [
-      {
-        id: "1",
-        author: "音楽好き",
-        authorId: "201",
-        authorAvatar: "/placeholder.svg?height=30&width=30",
-        content: "素晴らしいレビューですね！私も「白日」が特に好きです。",
-        date: "2023年12月11日",
-        likes: 5,
-      },
-      {
-        id: "2",
-        author: "ロック専門",
-        authorId: "202",
-        authorAvatar: "/placeholder.svg?height=30&width=30",
-        content: "King Gnuは本当に革新的なバンドだと思います。常田さんの音楽センスは素晴らしい。",
-        date: "2023年12月12日",
-        likes: 3,
-      },
-    ],
-    artist: "King Gnu",
-    album: "CEREMONY",
-    releaseYear: "2020",
+  const [post, setPost] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // 投稿データの取得
+    async function fetchPost() {
+      const postData = await getPostById(params.id);
+      setPost(postData);
+      setLoading(false);
+    }
+
+    // 現在のユーザーを取得
+    async function fetchUser() {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    }
+
+    fetchPost();
+    fetchUser();
+
+    // リアルタイムサブスクリプションの設定
+    const commentsSubscription = supabase
+      .channel('comments-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${params.id}`
+        },
+        async (payload) => {
+          // 新しいコメントが追加されたら投稿データを再取得
+          const updatedPost = await getPostById(params.id);
+          setPost(updatedPost);
+        }
+      )
+      .subscribe();
+
+    // クリーンアップ関数
+    return () => {
+      supabase.removeChannel(commentsSubscription);
+    };
+  }, [params.id]);
+
+  // コメント投稿処理
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!commentText.trim() || !user) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .insert([
+          {
+            content: commentText,
+            user_id: user.id,
+            post_id: params.id
+          }
+        ]);
+
+      if (error) {
+        throw error;
+      }
+
+      setCommentText("");
+    } catch (error) {
+      console.error("コメント投稿エラー:", error);
+      alert("コメントの投稿に失敗しました");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // いいね処理
+  const handleLike = async () => {
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
+    try {
+      // すでにいいねしているか確認
+      const { data: existingLike } = await supabase
+        .from('likes')
+        .select()
+        .eq('user_id', user.id)
+        .eq('post_id', params.id)
+        .single();
+
+      if (existingLike) {
+        // いいねを削除
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('post_id', params.id);
+      } else {
+        // いいねを追加
+        await supabase
+          .from('likes')
+          .insert([
+            {
+              user_id: user.id,
+              post_id: params.id
+            }
+          ]);
+      }
+
+      // 投稿データを再取得
+      const updatedPost = await getPostById(params.id);
+      setPost(updatedPost);
+    } catch (error) {
+      console.error("いいね処理エラー:", error);
+    }
+  };
+
+  if (loading) {
+    return <div className="container mx-auto px-4 py-8 text-center">読み込み中...</div>;
+  }
+
+  if (!post) {
+    return <div className="container mx-auto px-4 py-8 text-center">投稿が見つかりませんでした</div>;
   }
 
   return (
@@ -58,66 +156,84 @@ export default function PostPage({ params }: { params: { id: string } }) {
         <h1 className="text-3xl font-bold mt-2">{post.title}</h1>
         <div className="flex items-center mt-4">
           <Avatar className="h-10 w-10 mr-3">
-            <AvatarImage src={post.authorAvatar} alt={post.author} />
-            <AvatarFallback>{post.author[0]}</AvatarFallback>
+            <AvatarImage src={post.users?.image || '/placeholder.svg?height=40&width=40'} alt={post.users?.name} />
+            <AvatarFallback>{post.users?.name?.[0] || 'U'}</AvatarFallback>
           </Avatar>
           <div>
-            <Link href={`/users/${post.authorId}`} className="font-medium hover:text-primary transition-colors">
-              {post.author}
+            <Link href={`/users/${post.user_id}`} className="font-medium hover:text-primary transition-colors">
+              {post.users?.name || '不明なユーザー'}
             </Link>
-            <p className="text-sm text-muted-foreground">{post.date}</p>
+            <p className="text-sm text-muted-foreground">
+              {new Date(post.created_at).toLocaleDateString('ja-JP')}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="mb-8">
-        <div className="aspect-video bg-muted rounded-md mb-6 overflow-hidden">
-          <iframe
-            src={post.embedUrl}
-            className="w-full h-full"
-            title={post.title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          ></iframe>
-        </div>
+        {post.embed_url && (
+          <div className="aspect-video bg-muted rounded-md mb-6 overflow-hidden">
+            <iframe
+              src={post.embed_url.replace('watch?v=', 'embed/')}
+              className="w-full h-full"
+              title={post.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-6">
-          {post.tags.map((tag) => (
-            <Link key={tag} href={`/tags/${tag}`}>
+          {post.post_tags?.map((postTag: any) => (
+            <Link key={postTag.tags.id} href={`/tags/${postTag.tags.name}`}>
               <Badge variant="secondary" className="hover:bg-secondary/80 transition-colors">
-                {tag}
+                {postTag.tags.name}
               </Badge>
             </Link>
           ))}
         </div>
 
-        <div
-          className="prose prose-lg max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: post.content }}
-        ></div>
-
-        <div className="mt-6 bg-muted/30 p-4 rounded-md">
-          <h3 className="font-medium mb-2">曲情報</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>アーティスト:</div>
-            <div>{post.artist}</div>
-            <div>アルバム:</div>
-            <div>{post.album}</div>
-            <div>リリース年:</div>
-            <div>{post.releaseYear}</div>
-          </div>
+        <div className="prose prose-lg max-w-none dark:prose-invert">
+          {post.content.split('\n').map((paragraph: string, index: number) => (
+            <p key={index}>{paragraph}</p>
+          ))}
         </div>
+
+        {(post.artist || post.song) && (
+          <div className="mt-6 bg-muted/30 p-4 rounded-md">
+            <h3 className="font-medium mb-2">曲情報</h3>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {post.artist && (
+                <>
+                  <div>アーティスト:</div>
+                  <div>{post.artist}</div>
+                </>
+              )}
+              {post.song && (
+                <>
+                  <div>曲名:</div>
+                  <div>{post.song}</div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" className="flex items-center gap-1">
-            <Heart size={18} />
-            <span>{post.likes}</span>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="flex items-center gap-1"
+            onClick={handleLike}
+          >
+            <Heart size={18} className={user && post.likes?.some((like: any) => like.user_id === user.id) ? "fill-primary text-primary" : ""} />
+            <span>{post.likes?.length || 0}</span>
           </Button>
           <Button variant="ghost" size="sm" className="flex items-center gap-1">
             <MessageSquare size={18} />
-            <span>{post.comments.length}</span>
+            <span>{post.comments?.length || 0}</span>
           </Button>
         </div>
         <div className="flex items-center gap-2">
@@ -133,35 +249,25 @@ export default function PostPage({ params }: { params: { id: string } }) {
       <Separator className="my-8" />
 
       <div className="mb-8">
-        <h2 className="text-xl font-bold mb-4">コメント ({post.comments.length})</h2>
+        <h2 className="text-xl font-bold mb-4">コメント ({post.comments?.length || 0})</h2>
         <div className="space-y-6">
-          {post.comments.map((comment) => (
+          {post.comments?.map((comment: any) => (
             <div key={comment.id} className="flex gap-3">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={comment.authorAvatar} alt={comment.author} />
-                <AvatarFallback>{comment.author[0]}</AvatarFallback>
+                <AvatarImage src={comment.users?.image || '/placeholder.svg?height=30&width=30'} alt={comment.users?.name} />
+                <AvatarFallback>{comment.users?.name?.[0] || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
                 <div className="bg-muted/50 p-3 rounded-lg">
                   <div className="flex justify-between mb-1">
-                    <Link
-                      href={`/users/${comment.authorId}`}
-                      className="font-medium hover:text-primary transition-colors"
-                    >
-                      {comment.author}
+                    <Link href={`/users/${comment.user_id}`} className="font-medium hover:text-primary transition-colors">
+                      {comment.users?.name || '不明なユーザー'}
                     </Link>
-                    <span className="text-xs text-muted-foreground">{comment.date}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(comment.created_at).toLocaleDateString('ja-JP')}
+                    </span>
                   </div>
                   <p>{comment.content}</p>
-                </div>
-                <div className="flex items-center mt-1 ml-1">
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    <Heart size={14} className="mr-1" />
-                    <span>{comment.likes}</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    返信
-                  </Button>
                 </div>
               </div>
             </div>
@@ -171,10 +277,29 @@ export default function PostPage({ params }: { params: { id: string } }) {
 
       <div className="mb-8">
         <h3 className="text-lg font-medium mb-3">コメントを投稿</h3>
-        <Textarea placeholder="コメントを入力してください..." className="mb-3" rows={3} />
-        <Button>投稿する</Button>
+        {user ? (
+          <form onSubmit={handleSubmitComment}>
+            <Textarea 
+              placeholder="コメントを入力してください..." 
+              className="mb-3" 
+              rows={3} 
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              disabled={submitting}
+            />
+            <Button type="submit" disabled={submitting || !commentText.trim()}>
+              {submitting ? "投稿中..." : "投稿する"}
+            </Button>
+          </form>
+        ) : (
+          <div className="bg-muted/50 p-4 rounded-lg text-center">
+            <p className="mb-2">コメントを投稿するにはログインが必要です</p>
+            <Button asChild>
+              <Link href="/auth">ログイン / 新規登録</Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
-  )
+  );
 }
-

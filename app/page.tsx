@@ -1,101 +1,157 @@
-import Image from "next/image";
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Heart, MessageSquare, Music } from "lucide-react"
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="container mx-auto px-4 py-8">
+      <section className="mb-12">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">MusicShare</h1>
+          <p className="text-xl text-muted-foreground">音楽好きのための共有プラットフォーム</p>
+          <div className="flex justify-center gap-4 mt-6">
+            <Button asChild>
+              <Link href="/posts/new">新規投稿を作成</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/discover">音楽を探す</Link>
+            </Button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </section>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-bold mb-6">人気の投稿</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {popularPosts.map((post) => (
+            <Card key={post.id} className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <Link href={`/posts/${post.id}`}>
+                  <CardTitle className="hover:text-primary transition-colors">{post.title}</CardTitle>
+                </Link>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Link href={`/users/${post.authorId}`} className="font-medium hover:text-primary transition-colors">
+                    {post.author}
+                  </Link>
+                  <span className="mx-2">•</span>
+                  <span>{post.date}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="aspect-video bg-muted rounded-md mb-4 overflow-hidden">
+                  <img
+                    src={post.coverImage || "/placeholder.svg"}
+                    alt={post.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <p className="line-clamp-2 text-muted-foreground">{post.excerpt}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {post.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="flex items-center pt-2">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1">
+                    <Heart size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{post.likes}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MessageSquare size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{post.comments}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Music size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{post.artist}</span>
+                  </div>
+                </div>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+        <div className="text-center mt-6">
+          <Button variant="outline" asChild>
+            <Link href="/posts">すべての投稿を見る</Link>
+          </Button>
+        </div>
+      </section>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-bold mb-6">おすすめのジャンル</h2>
+        <div className="flex flex-wrap gap-3">
+          {genres.map((genre) => (
+            <Link key={genre} href={`/tags/${genre}`}>
+              <Badge variant="outline" className="text-base py-2 px-4 hover:bg-secondary transition-colors">
+                {genre}
+              </Badge>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
-  );
+  )
 }
+
+// ダミーデータ
+const popularPosts = [
+  {
+    id: "1",
+    title: "King Gnuの新アルバム「CEREMONY」レビュー",
+    author: "音楽マニア",
+    authorId: "101",
+    date: "2023年12月10日",
+    coverImage: "/placeholder.svg?height=200&width=400",
+    excerpt: "King Gnuの最新アルバム「CEREMONY」は、バンドの音楽的成長を感じさせる作品です。特に「白日」は...",
+    tags: ["J-Pop", "ロック", "King Gnu"],
+    likes: 124,
+    comments: 32,
+    artist: "King Gnu",
+  },
+  {
+    id: "2",
+    title: "懐かしの90年代R&Bプレイリスト",
+    author: "レトロ音楽ファン",
+    authorId: "102",
+    date: "2023年12月5日",
+    coverImage: "/placeholder.svg?height=200&width=400",
+    excerpt:
+      "90年代のR&Bは今聴いても色褪せない魅力があります。TLCからBoyz II Menまで、当時を代表する名曲を集めました...",
+    tags: ["R&B", "90年代", "プレイリスト"],
+    likes: 98,
+    comments: 17,
+    artist: "Various Artists",
+  },
+  {
+    id: "3",
+    title: "テイラー・スウィフトの音楽的変遷",
+    author: "ポップカルチャー評論家",
+    authorId: "103",
+    date: "2023年11月28日",
+    coverImage: "/placeholder.svg?height=200&width=400",
+    excerpt: "カントリーからポップへ、そして実験的なサウンドへ。テイラー・スウィフトの音楽的変遷を追います...",
+    tags: ["ポップ", "テイラー・スウィフト", "分析"],
+    likes: 156,
+    comments: 41,
+    artist: "Taylor Swift",
+  },
+]
+
+const genres = [
+  "J-Pop",
+  "ロック",
+  "ヒップホップ",
+  "R&B",
+  "クラシック",
+  "ジャズ",
+  "エレクトロニック",
+  "フォーク",
+  "メタル",
+  "インディー",
+]
+
